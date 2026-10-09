@@ -1,9 +1,11 @@
 ---
 name: bot-setup
 description: |
-  Install, configure, run, and operate the public Claude/Codex Telegram bot.
-  Use when a user asks to set up the bot, configure autostart, explain commands,
-  troubleshoot runtime issues, or choose language/engine/topic settings.
+  Installs, configures, runs, and troubleshoots an instance of the open-source Claude/Codex
+  Telegram bot (claude-code-telegram): uv install, .env settings, BotFather and forum-group setup,
+  autostart, bot commands, and smoke checks. Use whenever someone sets up or operates their own
+  installation of this bot, including choosing UI language, default engine, or exec and stream
+  modes and explaining what a bot command does. Creating or wiring a forum topic is topic-setup.
 ---
 
 # Bot Setup

@@ -1,13 +1,9 @@
 ---
 name: project-knowledge
 description: |
-  Public project knowledge for the Claude/Codex Telegram bot runtime:
-  architecture, topic config, runtime files, operator-owned deployment and direct access,
-  monitoring, recovery, testing, and release safety.
-
-  Use when: "project architecture", "bot architecture", "topic config",
-  "deployment", "install bot", "monitoring", "recovery", "direct host access",
-  "release rules", "public repo rules", "how this bot works", "project knowledge"
+  How this project is built: architecture, conventions, configuration, skills and pipelines,
+  deployment, and operations. Use whenever the project itself is changed, extended, debugged,
+  deployed, or explained, including small fixes and questions about how something in it works.
 ---
 
 # Project Knowledge

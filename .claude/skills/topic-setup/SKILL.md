@@ -1,9 +1,10 @@
 ---
 name: topic-setup
 description: |
-  Create or configure Telegram forum topics for the public Claude/Codex
-  Telegram bot. Use when a topic needs a working directory, engine, execution
-  mode, stream mode, MCP config, or a custom prompt mode.
+  Creates Telegram forum topics for the Claude/Codex Telegram bot and connects them in
+  topic_config.json to a project folder, engine, execution and stream mode, model, and MCP config.
+  Use whenever a topic should be created or connected to a project, including a new topic the bot
+  registered without a project folder and changing an existing topic's engine, mode, or model.
 ---
 
 # Topic Setup

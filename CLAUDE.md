@@ -7,8 +7,8 @@ Before editing, inspect the relevant files and keep changes scoped. Do not copy
 private prompts, private project knowledge, local runtime configs, secrets, or
 machine-specific deployment files into this repository.
 
-Use the public project knowledge skill when you need architecture or release
-context:
+Load the public project knowledge skill before changing, debugging, or explaining how
+this repository works:
 
 - `.claude/skills/project-knowledge/SKILL.md`
 
