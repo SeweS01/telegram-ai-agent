@@ -2515,15 +2515,17 @@ class TmuxManager:
                             state.session_name,
                         )
                     else:
-                        pane = await capture_pane(state.session_name)
-                        await self._send_modal_alert(
-                            channel_key,
-                            state,
-                            prompt,
-                            pane,
-                            reason="enter_delivery_unconfirmed",
+                        # We successfully sent Enter and observed no modal or
+                        # tmux error.  On an established Codex session the
+                        # input bar can lag behind the transcript, so warning
+                        # the user to resend here can duplicate a request that
+                        # Codex already accepted.  Continue with the existing
+                        # transcript tail; it is the authoritative turn
+                        # signal for this session.
+                        logger.info(
+                            "TUI_IO: codex delivery awaiting existing transcript session=%s",
+                            state.session_name,
                         )
-                        return ""
 
                 self.mark_prompt_pending(channel_key)
 

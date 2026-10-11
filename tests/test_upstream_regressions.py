@@ -79,6 +79,59 @@ async def test_fresh_codex_late_acceptance_continues_from_discovered_transcript(
 
 
 @pytest.mark.asyncio
+async def test_existing_codex_late_acceptance_continues_without_resend_alert(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A lagging input bar on an existing transcript must not invite a duplicate."""
+    manager = TmuxManager(tmp_path / "sessions")
+    channel_key = (100, 201)
+    state = TmuxSessionState(
+        session_name="cc-100-201",
+        session_dir=str(tmp_path / "sessions" / "cc-100-201"),
+        session_id="00000000-0000-4000-8000-000000000002",
+        mode="acceptEdits",
+        cwd=str(tmp_path),
+        mcp_config="",
+        chat_id=100,
+        offset=0,
+        runner_version="codex-tui-v1",
+        provider="codex",
+        model=None,
+        transcript_path=str(tmp_path / "turn.jsonl"),
+        base_mcp_config=None,
+    )
+    manager._sessions[channel_key] = state
+
+    monkeypatch.setattr(CODEX_ADAPTER, "is_modal_present", lambda _pane: False)
+    monkeypatch.setattr(manager, "_codex_delivery_visible", lambda *_args: True)
+    monkeypatch.setattr(manager, "_codex_prompt_still_in_input_bar", lambda *_args: True)
+    monkeypatch.setattr(tmux_manager_module, "_CODEX_PASTE_POLL_STEP_SEC", 0.0)
+    monkeypatch.setattr(tmux_manager_module, "_ENTER_RETRY_SETTLE_SEC", 0.0)
+
+    monkeypatch.setattr(
+        tmux_manager_module,
+        "capture_pane",
+        AsyncMock(return_value="pane with prompt still visible"),
+    )
+    monkeypatch.setattr(tmux_manager_module, "send_text_to_tmux", AsyncMock())
+    send_enter = AsyncMock()
+    monkeypatch.setattr(tmux_manager_module, "send_enter", send_enter)
+    alert = AsyncMock()
+    monkeypatch.setattr(manager, "_send_modal_alert", alert)
+    locate = AsyncMock()
+    monkeypatch.setattr(manager, "_locate_codex_transcript_after_send", locate)
+    tail = AsyncMock(return_value=("", None))
+    monkeypatch.setattr(manager, "_tail_until_done", tail)
+
+    await manager.send_stream(channel_key, "existing prompt", AsyncMock())
+
+    assert send_enter.await_count == tmux_manager_module._ENTER_RETRY_LIMIT
+    locate.assert_not_awaited()
+    tail.assert_awaited_once()
+    alert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_recycle_ignores_idle_queue_lock_held_by_tmux_tail() -> None:
     """A completed provider turn can be recycled while its tail callback remains alive."""
     message = MagicMock()
