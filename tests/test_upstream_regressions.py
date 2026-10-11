@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from telegram_bot.core.handlers import commands
+from telegram_bot.core.messages import t
 from telegram_bot.core.services import tmux_manager as tmux_manager_module
 from telegram_bot.core.services.providers import CODEX_ADAPTER, CodexTranscriptSnapshot
 from telegram_bot.core.services.tmux_manager import TmuxManager
@@ -74,3 +76,59 @@ async def test_fresh_codex_late_acceptance_continues_from_discovered_transcript(
     locate.assert_awaited_once()
     tail.assert_awaited_once()
     alert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_recycle_ignores_idle_queue_lock_held_by_tmux_tail() -> None:
+    """A completed provider turn can be recycled while its tail callback remains alive."""
+    message = MagicMock()
+    message.chat.id = 100
+    message.message_thread_id = 200
+    message.answer = AsyncMock()
+
+    tmux_manager = MagicMock()
+    tmux_manager.is_active.return_value = True
+    tmux_manager.is_processing.return_value = False
+    tmux_manager.recycle = AsyncMock(return_value=True)
+
+    message_queue = MagicMock()
+    message_queue.is_busy.return_value = True
+    message_queue.has_pending.return_value = False
+    session_manager = MagicMock()
+
+    await commands.handle_recycle(
+        message,
+        tmux_manager,
+        session_manager,
+        message_queue,
+    )
+
+    tmux_manager.recycle.assert_awaited_once_with((100, 200), session_manager)
+    message.answer.assert_awaited_once_with(t("ui.recycle_done"))
+    message_queue.is_busy.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_recycle_still_blocks_messages_waiting_in_queue() -> None:
+    message = MagicMock()
+    message.chat.id = 100
+    message.message_thread_id = 200
+    message.answer = AsyncMock()
+
+    tmux_manager = MagicMock()
+    tmux_manager.is_active.return_value = True
+    tmux_manager.is_processing.return_value = False
+    tmux_manager.recycle = AsyncMock(return_value=True)
+
+    message_queue = MagicMock()
+    message_queue.has_pending.return_value = True
+
+    await commands.handle_recycle(
+        message,
+        tmux_manager,
+        MagicMock(),
+        message_queue,
+    )
+
+    tmux_manager.recycle.assert_not_awaited()
+    message.answer.assert_awaited_once_with(t("ui.exec_mode_busy"))
