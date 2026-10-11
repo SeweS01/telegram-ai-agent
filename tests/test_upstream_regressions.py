@@ -123,11 +123,12 @@ async def test_existing_codex_late_acceptance_continues_without_resend_alert(
     tail = AsyncMock(return_value=("", None))
     monkeypatch.setattr(manager, "_tail_until_done", tail)
 
-    await manager.send_stream(channel_key, "existing prompt", AsyncMock())
+    delivered = await manager.send_direct(channel_key, "existing prompt")
 
+    assert delivered is True
     assert send_enter.await_count == tmux_manager_module._ENTER_RETRY_LIMIT
     locate.assert_not_awaited()
-    tail.assert_awaited_once()
+    tail.assert_not_awaited()
     alert.assert_not_awaited()
 
 

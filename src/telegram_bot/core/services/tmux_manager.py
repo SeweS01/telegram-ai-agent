@@ -1363,6 +1363,16 @@ class TmuxManager:
         session_name = state.session_name
         outcome = await self._safe_send_outcome(channel_key, state, prompt)
         if outcome is _SafeSendOutcome.UNCERTAIN:
+            if state.session_id is not None:
+                # send_direct is used only for a live, already-tailed
+                # session. A successful Enter with no modal/tmux error is
+                # safer to hand to that authoritative transcript tail than
+                # to tell the user to resend and risk duplicate execution.
+                logger.info(
+                    "TUI_IO: codex direct delivery awaiting transcript session=%s",
+                    session_name,
+                )
+                return True
             pane = await capture_pane(state.session_name)
             await self._send_modal_alert(
                 channel_key,
