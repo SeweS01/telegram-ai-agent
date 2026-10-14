@@ -8,7 +8,11 @@ import pytest
 from telegram_bot.core.handlers import commands
 from telegram_bot.core.messages import t
 from telegram_bot.core.services import tmux_manager as tmux_manager_module
-from telegram_bot.core.services.providers import CODEX_ADAPTER, CodexTranscriptSnapshot
+from telegram_bot.core.services.providers import (
+    CODEX_ADAPTER,
+    CodexTranscriptSnapshot,
+    TuiSessionInfo,
+)
 from telegram_bot.core.services.tmux_manager import TmuxManager
 from telegram_bot.core.services.tmux_state import TmuxSessionState
 
@@ -76,6 +80,58 @@ async def test_fresh_codex_late_acceptance_continues_from_discovered_transcript(
     locate.assert_awaited_once()
     tail.assert_awaited_once()
     alert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fresh_codex_discovery_allows_slow_cold_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fresh-session confirmation must outlive the former 30-second boundary."""
+    manager = TmuxManager(tmp_path / "sessions")
+    state = TmuxSessionState(
+        session_name="cc-100-202",
+        session_dir=str(tmp_path / "sessions" / "cc-100-202"),
+        session_id=None,
+        mode="acceptEdits",
+        cwd=str(tmp_path),
+        mcp_config="",
+        chat_id=100,
+        offset=0,
+        runner_version="codex-tui-v1",
+        provider="codex",
+        model=None,
+        transcript_path=None,
+        base_mcp_config=None,
+    )
+    snapshot = CodexTranscriptSnapshot(root=tmp_path / "codex-sessions", files={})
+    transcript = tmp_path / "turn.jsonl"
+    locate = AsyncMock(
+        return_value=TuiSessionInfo(
+            session_id="00000000-0000-4000-8000-000000000003",
+            transcript_path=transcript,
+            tail_start_offset=17,
+        )
+    )
+    monkeypatch.setattr(CODEX_ADAPTER, "locate_tui_transcript", locate)
+    save_state = MagicMock()
+    monkeypatch.setattr(manager, "_save_state", save_state)
+
+    await manager._locate_codex_transcript_after_send(
+        state,
+        snapshot=snapshot,
+        prompt="slow first prompt",
+    )
+
+    locate.assert_awaited_once_with(
+        cwd=str(tmp_path),
+        snapshot=snapshot,
+        prompt="slow first prompt",
+        timeout_sec=60.0,
+    )
+    assert state.session_id == "00000000-0000-4000-8000-000000000003"
+    assert state.transcript_path == str(transcript)
+    assert state.offset == 17
+    save_state.assert_called_once_with()
 
 
 @pytest.mark.asyncio

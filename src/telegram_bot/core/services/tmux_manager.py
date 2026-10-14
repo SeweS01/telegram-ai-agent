@@ -167,6 +167,12 @@ _POLL_STEP_SEC = 0.05  # fine-grained poll interval inside send_direct's pane-ve
 _ENTER_RETRY_SETTLE_SEC = 0.5
 _ENTER_RETRY_LIMIT = 3
 
+# A cold Codex start can accept the first prompt only after profile/plugin
+# initialization has continued well beyond the pane-level Enter retry window.
+# Keep transcript confirmation bounded, but allow enough time for the exact
+# prompt record to appear before presenting an unconfirmed-delivery warning.
+_CODEX_TRANSCRIPT_DISCOVERY_TIMEOUT_SEC = 60.0
+
 # Codex `_safe_send_codex` paste-visibility budget. The user payload is
 # pasted exactly once, then observed across three 1.5s polling windows.
 # Re-pasting an unobserved payload is unsafe: delayed bracketed-paste events
@@ -3510,7 +3516,7 @@ class TmuxManager:
                 cwd=state.cwd,
                 snapshot=snapshot,
                 prompt=prompt,
-                timeout_sec=30.0,
+                timeout_sec=_CODEX_TRANSCRIPT_DISCOVERY_TIMEOUT_SEC,
             )
         except Exception:
             raise RuntimeError("Codex TUI transcript discovery failed") from None
