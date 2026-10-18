@@ -458,10 +458,15 @@ restarts after crashes.
 APP_DIR="$(pwd)"
 UV_BIN="$(command -v uv)"
 USER_NAME="$(whoami)"
+ENV_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/telegram-ai-agent"
+ENV_FILE="${ENV_DIR}/telegram-bot.env"
 tmp_unit="$(mktemp)"
+install -d -m 0700 "${ENV_DIR}"
+install -m 0600 .env "${ENV_FILE}"
 sed \
   -e "s#REPLACE_WITH_LINUX_USER#${USER_NAME}#g" \
   -e "s#REPLACE_WITH_ABSOLUTE_REPO_PATH#${APP_DIR}#g" \
+  -e "s#REPLACE_WITH_ABSOLUTE_ENV_PATH#${ENV_FILE}#g" \
   -e "s#REPLACE_WITH_UV_PATH#${UV_BIN}#g" \
   docs/systemd/telegram-bot.service.template >"${tmp_unit}"
 sudo install -m 0644 "${tmp_unit}" /etc/systemd/system/telegram-bot.service
@@ -472,6 +477,10 @@ sudo systemctl enable telegram-bot
 sudo systemctl start telegram-bot
 sudo systemctl status telegram-bot
 ```
+
+The service reads its private environment copy from the user's configuration
+directory, not from the Git checkout. Repeat the `install -m 0600` command and
+restart the service after changing `.env`. Never commit either file.
 
 Logs:
 
