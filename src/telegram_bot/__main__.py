@@ -36,6 +36,7 @@ from telegram_bot.core.services.claude import SessionManager
 from telegram_bot.core.services.codex_update import CodexUpdateService
 from telegram_bot.core.services.message_queue import MessageQueue
 from telegram_bot.core.services.picker_store import PickerStore
+from telegram_bot.core.services.runtime_dispatch import RuntimeDispatchGuard
 from telegram_bot.core.services.tmux_manager import TmuxManager
 from telegram_bot.core.services.topic_config import TopicConfig
 from telegram_bot.core.services.topic_runtime import BotDefaults
@@ -197,6 +198,25 @@ async def _start() -> None:
     tmux_manager = TmuxManager(
         sessions_dir=tmux_sessions_dir,
     )
+    runtime_dispatch_values = (
+        settings.ai_agent_runtime_socket,
+        settings.ai_agent_runtime_agent_instance_id,
+        settings.ai_agent_runtime_chat_id,
+    )
+    if any(value not in {"", None} for value in runtime_dispatch_values):
+        if not all(value not in {"", None} for value in runtime_dispatch_values):
+            raise RuntimeError("AI Agent Runtime dispatch configuration is incomplete")
+        managed_chat_id = settings.ai_agent_runtime_chat_id
+        if managed_chat_id is None:
+            raise RuntimeError("AI Agent Runtime managed chat id is missing")
+        tmux_manager.wire_runtime_dispatch_guard(
+            RuntimeDispatchGuard(
+                socket_path=Path(settings.ai_agent_runtime_socket),
+                agent_instance_id=settings.ai_agent_runtime_agent_instance_id,
+                managed_chat_id=managed_chat_id,
+                wait_timeout_seconds=settings.ai_agent_runtime_dispatch_wait_sec,
+            )
+        )
     codex_update_service = CodexUpdateService(
         state_path=tmux_sessions_dir / "codex_update.json",
         timeout_sec=settings.codex_update_timeout_sec,

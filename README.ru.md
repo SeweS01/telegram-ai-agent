@@ -189,6 +189,10 @@ CODEX_UPDATE_COOLDOWN_SEC=86400
 - `DEEPGRAM_API_KEY`: оставьте пустым, если не нужны voice messages.
 - `CODEX_AUTO_UPDATE_ENABLED`: включает автоматические и ручные обновления
   Codex. Timeout ограничивает любое обновление, cooldown — только автоматические.
+- `AI_AGENT_RUNTIME_SOCKET`, `AI_AGENT_RUNTIME_AGENT_INSTANCE_ID` и
+  `AI_AGENT_RUNTIME_CHAT_ID`: необязательный локальный барьер Runtime. Он
+  передаёт только идентификатор топика и не позволяет отправить новый запрос
+  старому процессу, пока ожидается смена модели.
 
 Запустите в foreground:
 

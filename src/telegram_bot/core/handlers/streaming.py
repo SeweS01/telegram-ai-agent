@@ -21,6 +21,10 @@ from telegram_bot.core.services.live_buffer import LiveStatusBuffer
 from telegram_bot.core.services.providers import choose_available_engine, engine_display_name
 from telegram_bot.core.services.rich_content import normalize_telegram_text_content
 from telegram_bot.core.services.rich_sender import send_rich_final_answer
+from telegram_bot.core.services.runtime_dispatch import (
+    DispatchDecision,
+    RuntimeDispatchError,
+)
 from telegram_bot.core.services.telegram_utils import (
     SendOutcome,
     send_html_with_fallback,
@@ -261,6 +265,51 @@ async def ensure_exec_mode_ready(
             msg_id,
         )
     async with lock:
+        try:
+            dispatch = await tmux_manager.prepare_runtime_dispatch(key)
+            if dispatch is not None:
+                deadline = (
+                    asyncio.get_running_loop().time()
+                    + tmux_manager.runtime_dispatch_wait_timeout_seconds
+                )
+                wait_notified = False
+                while dispatch.decision is DispatchDecision.WAIT:
+                    if not wait_notified:
+                        await source_msg.answer(
+                            t("ui.runtime_switch_waiting"),
+                            disable_notification=True,
+                        )
+                        wait_notified = True
+                    if asyncio.get_running_loop().time() >= deadline:
+                        raise RuntimeDispatchError("Runtime model switch wait timed out")
+                    await asyncio.sleep(dispatch.retry_after_seconds)
+                    dispatch = await tmux_manager.prepare_runtime_dispatch(key)
+                    if dispatch is None:
+                        raise RuntimeDispatchError("Runtime dispatch guard disappeared")
+
+                should_resume = dispatch.decision is DispatchDecision.RECYCLE_REQUIRED or (
+                    dispatch.decision is DispatchDecision.START_REQUIRED
+                    and tmux_manager.has_session_state(key)
+                )
+                if should_resume:
+                    resumed = await tmux_manager.recycle(
+                        key,
+                        session_manager,
+                        model_override=dispatch.desired_model,
+                        provider_override=dispatch.desired_provider,
+                    )
+                    if not resumed:
+                        raise RuntimeDispatchError("Runtime requested a session replacement")
+                    logger.info(
+                        "Runtime dispatch replaced topic session channel=%s msg=%d",
+                        key,
+                        msg_id,
+                    )
+        except (RuntimeDispatchError, RuntimeError) as exc:
+            logger.error("Runtime dispatch blocked %s: %s", key, exc)
+            await source_msg.answer(t("ui.runtime_dispatch_failed"))
+            return False
+
         if tmux_manager.is_active(key):
             logger.info(
                 "MSG_TRACE ensure_exec_mode_ready already_active channel=%s msg=%d",

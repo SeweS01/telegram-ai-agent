@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     codex_update_timeout_sec: float = 180
     codex_update_cooldown_sec: float = 86400
     codex_auto_update_enabled: bool = True
+    ai_agent_runtime_socket: str = ""
+    ai_agent_runtime_agent_instance_id: str = ""
+    ai_agent_runtime_chat_id: int | None = None
+    ai_agent_runtime_dispatch_wait_sec: float = 21600
 
     @classmethod
     def settings_customise_sources(

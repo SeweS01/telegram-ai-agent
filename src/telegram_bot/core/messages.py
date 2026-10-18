@@ -52,6 +52,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ui.tmux_not_active": "No active tmux session in this topic",
         "ui.recycle_done": "♻️ Runtime restarted",
         "ui.recycle_failed": "❌ Couldn't restart the runtime. Try again in a moment.",
+        "ui.runtime_switch_waiting": (
+            "⏳ Waiting for the current task to finish before switching the runtime."
+        ),
+        "ui.runtime_dispatch_failed": (
+            "❌ The runtime couldn't confirm the selected configuration. The message was not sent."
+        ),
         "ui.engine_starting": (
             "🔄 {engine} is starting up — please wait a few seconds before sending."
         ),
@@ -323,6 +329,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ui.recycle_done": "♻️ Runtime перезапущен",
         "ui.recycle_failed": (
             "❌ Не удалось перезапустить runtime. Попробуй ещё раз через пару секунд."
+        ),
+        "ui.runtime_switch_waiting": ("⏳ Жду завершения текущей задачи, затем переключу runtime."),
+        "ui.runtime_dispatch_failed": (
+            "❌ Runtime не подтвердил выбранную конфигурацию. Сообщение не отправлено."
         ),
         "ui.engine_starting": (
             "🔄 {engine} запускается — подожди несколько секунд перед отправкой."

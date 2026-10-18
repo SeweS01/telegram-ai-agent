@@ -63,6 +63,7 @@ from telegram_bot.core.services.providers import (
     CodexTranscriptSnapshot,
     agent_env_prefix,
 )
+from telegram_bot.core.services.runtime_dispatch import DispatchResult, RuntimeDispatchGuard
 from telegram_bot.core.services.tail_runner import TailRunner
 from telegram_bot.core.services.tmux_modal_watchdog import (
     ModalWatchdog,
@@ -325,6 +326,7 @@ class TmuxManager:
         self._transcript_lag_warned: set[ChannelKey] = set()
         self._transcript_last_offsets: dict[ChannelKey, int] = {}
         self._codex_update_service: object | None = None
+        self._runtime_dispatch_guard: RuntimeDispatchGuard | None = None
 
     # --- Backwards-compatible accessors ---
 
@@ -359,6 +361,23 @@ class TmuxManager:
         """
         self._bot = bot
         self._topic_config = topic_config
+
+    def wire_runtime_dispatch_guard(self, guard: RuntimeDispatchGuard) -> None:
+        self._runtime_dispatch_guard = guard
+
+    async def prepare_runtime_dispatch(self, channel_key: ChannelKey) -> DispatchResult | None:
+        if self._runtime_dispatch_guard is None:
+            return None
+        return await self._runtime_dispatch_guard.prepare(channel_key)
+
+    @property
+    def runtime_dispatch_wait_timeout_seconds(self) -> float:
+        if self._runtime_dispatch_guard is None:
+            return 0.0
+        return self._runtime_dispatch_guard.wait_timeout_seconds
+
+    def has_session_state(self, channel_key: ChannelKey) -> bool:
+        return channel_key in self._sessions
 
     def wire_codex_update_service(self, service: object) -> None:
         self._codex_update_service = service
@@ -3047,7 +3066,14 @@ class TmuxManager:
         async with self._get_channel_lock(channel_key):
             await self._kill_session_unlocked(channel_key)
 
-    async def recycle(self, channel_key: ChannelKey, session_manager: object) -> bool:
+    async def recycle(
+        self,
+        channel_key: ChannelKey,
+        session_manager: object,
+        *,
+        model_override: str | None = None,
+        provider_override: str | None = None,
+    ) -> bool:
         """Restart the current tmux runtime and clean its MCP processes.
 
         Unlike `/new`, this does not intentionally reset conversation state.
@@ -3068,6 +3094,10 @@ class TmuxManager:
                 await self._wait_for_tail_exit(channel_key)
 
             candidate = replace(state)
+            if provider_override is not None and provider_override != candidate.provider:
+                raise RuntimeError("Runtime provider switch requires an explicit provider adapter")
+            if model_override is not None:
+                candidate.model = model_override
             candidate.base_mcp_config = self._effective_base_mcp_config(
                 channel_key=channel_key,
                 base_mcp_config=candidate.base_mcp_config or candidate.mcp_config,

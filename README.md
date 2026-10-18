@@ -187,6 +187,10 @@ Notes:
 - `DEEPGRAM_API_KEY`: leave empty if you do not need voice messages.
 - `CODEX_AUTO_UPDATE_ENABLED`: enables automatic and manual Codex updates.
   Timeout bounds every update; cooldown applies only to automatic updates.
+- `AI_AGENT_RUNTIME_SOCKET`, `AI_AGENT_RUNTIME_AGENT_INSTANCE_ID`, and
+  `AI_AGENT_RUNTIME_CHAT_ID`: optional all-or-nothing local Runtime dispatch
+  guard. It sends channel identity only and prevents a pending model change
+  from routing a new prompt to the previous process.
 
 Run in the foreground:
 
