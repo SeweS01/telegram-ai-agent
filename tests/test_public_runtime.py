@@ -276,6 +276,18 @@ def test_public_agent_environment_is_sanitized() -> None:
     assert "UNRELATED_SECRET" not in env
 
 
+def test_public_agent_environment_replaces_noninteractive_term() -> None:
+    env = agent_process_env(base_env={"TERM": "dumb"})
+
+    assert env["TERM"] == "xterm-256color"
+
+
+def test_public_agent_environment_preserves_interactive_term() -> None:
+    env = agent_process_env(base_env={"TERM": "screen-256color"})
+
+    assert env["TERM"] == "screen-256color"
+
+
 def test_public_prompt_modes_have_bot_mcp_tools() -> None:
     required = {
         "mcp__bot__send_message",

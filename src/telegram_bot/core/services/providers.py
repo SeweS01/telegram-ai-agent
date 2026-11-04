@@ -33,6 +33,7 @@ Engine = Literal["claude", "codex"]
 _CODEX_BOT_HOME = Path.home() / ".codex-bot"
 _CODEX_HOME = Path.home() / ".codex"
 _TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+_UNUSABLE_INTERACTIVE_TERMS = {"", "dumb", "unknown"}
 
 
 def _env_truthy(name: str) -> bool:
@@ -204,6 +205,12 @@ def extend_agent_env_allowlist(names: set[str]) -> None:
     _CODEX_ENV_ALLOWLIST.update(names)
 
 
+def _ensure_interactive_term(env: dict[str, str]) -> None:
+    """Give interactive provider TUIs a terminal type they can actually use."""
+    if env.get("TERM", "").strip().lower() in _UNUSABLE_INTERACTIVE_TERMS:
+        env["TERM"] = "xterm-256color"
+
+
 def agent_process_env(
     *,
     binary: str | Path | None = None,
@@ -222,7 +229,7 @@ def agent_process_env(
         )
     env.pop("NPM_CONFIG_PREFIX", None)
     env.setdefault("HOME", str(Path.home()))
-    env.setdefault("TERM", "xterm-256color")
+    _ensure_interactive_term(env)
     return env
 
 
@@ -250,7 +257,7 @@ def codex_process_env(
         )
         env.pop("NPM_CONFIG_PREFIX", None)
         env.setdefault("HOME", str(Path.home()))
-        env.setdefault("TERM", "xterm-256color")
+        _ensure_interactive_term(env)
     if _use_codex_bot_home():
         _ensure_codex_global_skill_links()
         env["CODEX_HOME"] = str(_CODEX_BOT_HOME)
