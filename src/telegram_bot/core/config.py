@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     session_mapping_max_size: int = 5000  # each interaction records multiple response chunks
     shutdown_timeout_sec: int = 7  # Gives the service manager time to stop cleanly.
     topic_config_path: str = "./topic_config.json"
+    # Optional operator-owned base MCP profile.  Production deployments can
+    # keep credentials and environment-file paths outside immutable releases.
+    # Empty preserves the public single-checkout default.
+    bot_mcp_config_path: str = ""
     notification_chat_id: int | None = None
     tmux_sessions_dir: str = "./tmux_sessions"
     codex_update_timeout_sec: float = 180

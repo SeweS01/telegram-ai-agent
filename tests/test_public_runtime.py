@@ -181,6 +181,21 @@ def test_public_relative_file_cache_dir_is_agent_readable(tmp_path: Path) -> Non
     assert session_manager.file_cache_dir == str((root / "data").resolve())
 
 
+def test_public_default_mcp_config_can_be_operator_owned(tmp_path: Path) -> None:
+    app_root = tmp_path / "release"
+    profile = tmp_path / "operator" / "bot-mcp.json"
+    settings = Settings(
+        _env_file=None,
+        telegram_bot_token="test-token",
+        app_root=str(app_root),
+        bot_mcp_config_path=str(profile),
+    )
+
+    session_manager = SessionManager(settings)
+
+    assert session_manager.default_mcp_config_path() == str(profile.resolve())
+
+
 def test_public_start_wires_live_buffer_before_restore_all() -> None:
     source = Path("src/telegram_bot/__main__.py").read_text(encoding="utf-8")
 

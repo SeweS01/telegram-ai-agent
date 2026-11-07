@@ -245,6 +245,10 @@ class SessionManager:
 
     def default_mcp_config_path(self) -> str:
         """Default MCP config path used by bot-launched sessions."""
+        if self._settings.bot_mcp_config_path:
+            return str(
+                self._settings.resolve_app_path(self._settings.bot_mcp_config_path).resolve()
+            )
         return str(default_bot_mcp_config(self._settings.app_root_path))
 
     def _default_cwd(self) -> Path:
