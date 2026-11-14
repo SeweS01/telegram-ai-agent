@@ -3079,7 +3079,9 @@ class TmuxManager:
         Unlike `/new`, this does not intentionally reset conversation state.
         It resumes when the provider has a known session id; Codex sessions
         without discovered ids are restarted fresh because there is nothing
-        reliable to resume.
+        reliable to resume.  A Runtime-authorized provider change always
+        starts a fresh provider-native session: Claude and Codex session ids
+        are not interchangeable.
         """
         async with self._get_channel_lock(channel_key):
             state = self._sessions.get(channel_key)
@@ -3094,8 +3096,23 @@ class TmuxManager:
                 await self._wait_for_tail_exit(channel_key)
 
             candidate = replace(state)
-            if provider_override is not None and provider_override != candidate.provider:
-                raise RuntimeError("Runtime provider switch requires an explicit provider adapter")
+            provider_changed = (
+                provider_override is not None and provider_override != candidate.provider
+            )
+            if provider_override is not None:
+                if provider_override not in {"claude", "codex"}:
+                    raise RuntimeError("Runtime requested an unsupported provider")
+                candidate.provider = provider_override
+            if provider_changed:
+                # Never feed one provider's conversation id or transcript to
+                # another provider.  Runtime has already retired the obsolete
+                # process before authorizing this replacement.
+                candidate.session_id = None
+                candidate.transcript_path = None
+                candidate.offset = 0
+                candidate.runner_version = (
+                    "codex-tui-v1" if candidate.provider == "codex" else "claude-tui-v1"
+                )
             if model_override is not None:
                 candidate.model = model_override
             candidate.base_mcp_config = self._effective_base_mcp_config(
@@ -3172,8 +3189,16 @@ class TmuxManager:
             self._sessions[channel_key] = state
             self._modal_alerted_channels.discard(channel_key)
             self._save_state()
+            if provider_changed:
+                clear_provider = getattr(session_manager, "clear_provider_session", None)
+                if clear_provider is not None:
+                    await clear_provider(channel_key)
             logger.info(
-                "Recycled tmux session %s for channel %s", candidate.session_name, channel_key
+                "Recycled tmux session %s for channel %s (provider=%s, provider_changed=%s)",
+                candidate.session_name,
+                channel_key,
+                candidate.provider,
+                provider_changed,
             )
             return True
 
