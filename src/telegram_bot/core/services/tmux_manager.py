@@ -58,6 +58,7 @@ from telegram_bot.core.messages import t
 from telegram_bot.core.services.bot_mcp_runtime import ensure_bot_runtime_mcp_config
 from telegram_bot.core.services.claude import Mode, StreamEvent
 from telegram_bot.core.services.process_cleanup import cleanup_tmux_runtime, runtime_diagnostics
+from telegram_bot.core.services.provider_runtime import claude_runtime_transcript_path
 from telegram_bot.core.services.providers import (
     CODEX_ADAPTER,
     CodexTranscriptSnapshot,
@@ -844,6 +845,12 @@ class TmuxManager:
                 t("ui.engine_start_failed", engine=provider, exc=str(exc)[:200]),
             )
             raise
+
+        resolved_transcript = self._transcript_path_for_state(state)
+        if resolved_transcript is not None:
+            state.transcript_path = str(resolved_transcript)
+            if resume_session_id is not None:
+                state.offset = self._file_size(resolved_transcript)
 
         # `_spawn_tmux` may have succeeded structurally (tmux up + prompt
         # ready) but the input probe failed — typically because a startup
@@ -3593,6 +3600,16 @@ class TmuxManager:
             )
         if not state.session_id:
             return None
+        runtime_path = claude_runtime_transcript_path(
+            session_dir=state.session_dir,
+            cwd=state.cwd,
+            session_id=state.session_id,
+        )
+        if runtime_path is not None:
+            state.transcript_path = str(runtime_path)
+            return runtime_path
+        if state.transcript_path:
+            return Path(state.transcript_path)
         return transcript_path(state.cwd, state.session_id)
 
     def _codex_transcript_for_state(self, channel_key: ChannelKey) -> Path | None:

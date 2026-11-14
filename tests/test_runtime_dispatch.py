@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, Mock
@@ -210,3 +211,76 @@ async def test_runtime_recycle_switches_provider_without_reusing_foreign_session
         provider="claude",
     )
     session_manager.clear_provider_session.assert_awaited_once_with(channel_key)
+
+
+def test_claude_runtime_metadata_selects_isolated_transcript_root(tmp_path: Path) -> None:
+    manager = TmuxManager(tmp_path / "sessions")
+    session_id = "01a14985-de09-4190-bc15-4c4c258f60b0"
+    session_dir = tmp_path / "sessions" / "cc-n1001-42"
+    session_dir.mkdir(parents=True)
+    config_dir = tmp_path / "runtime" / "claude-config" / "deepseek_default"
+    metadata = session_dir / "provider.runtime.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "provider": "claude_code",
+                "session_id": session_id,
+                "config_dir": str(config_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    metadata.chmod(0o600)
+    state = TmuxSessionState(
+        session_name="cc-n1001-42",
+        session_dir=str(session_dir),
+        session_id=session_id,
+        mode="free",
+        cwd="/home/devops/workspace/repos/foto_bot",
+        mcp_config="",
+        chat_id=-1001,
+        provider="claude",
+        transcript_path=None,
+    )
+
+    path = manager._transcript_path_for_state(state)
+
+    assert path == (
+        config_dir / "projects" / "-home-devops-workspace-repos-foto-bot" / f"{session_id}.jsonl"
+    )
+    assert state.transcript_path == str(path)
+
+
+def test_claude_runtime_metadata_rejects_wrong_session(tmp_path: Path) -> None:
+    manager = TmuxManager(tmp_path / "sessions")
+    session_id = "01a14985-de09-4190-bc15-4c4c258f60b0"
+    session_dir = tmp_path / "sessions" / "cc-n1001-42"
+    session_dir.mkdir(parents=True)
+    metadata = session_dir / "provider.runtime.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "provider": "claude_code",
+                "session_id": "11a14985-de09-4190-bc15-4c4c258f60b0",
+                "config_dir": str(tmp_path / "untrusted"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    metadata.chmod(0o600)
+    known_path = tmp_path / "known.jsonl"
+    state = TmuxSessionState(
+        session_name="cc-n1001-42",
+        session_dir=str(session_dir),
+        session_id=session_id,
+        mode="free",
+        cwd=str(tmp_path),
+        mcp_config="",
+        chat_id=-1001,
+        provider="claude",
+        transcript_path=str(known_path),
+    )
+
+    assert manager._transcript_path_for_state(state) == known_path

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from telegram_bot.core.services.bot_mcp_runtime import ensure_bot_runtime_mcp_config
 from telegram_bot.core.services.claude import StreamEvent
+from telegram_bot.core.services.provider_runtime import claude_runtime_transcript_path
 from telegram_bot.core.services.providers import CODEX_ADAPTER
 from telegram_bot.core.services.tmux_spawn import (
     file_size,
@@ -53,6 +54,16 @@ def _state_transcript_path(state: TmuxSessionState) -> Path | None:
         return path
     if not state.session_id:
         return None
+    runtime_path = claude_runtime_transcript_path(
+        session_dir=state.session_dir,
+        cwd=state.cwd,
+        session_id=state.session_id,
+    )
+    if runtime_path is not None:
+        state.transcript_path = str(runtime_path)
+        return runtime_path
+    if state.transcript_path:
+        return Path(state.transcript_path)
     return _transcript_path(state.cwd, state.session_id)
 
 

@@ -38,10 +38,22 @@ def transcript_path(cwd: str | Path, session_id: str, home: Path | None = None) 
     Uses an explicit `if / raise ValueError` instead of `assert` because
     running Python with `-O` silently strips asserts, disabling the guard.
     """
+    home = home or Path.home()
+    return transcript_path_for_config_dir(cwd, session_id, home / ".claude")
+
+
+def transcript_path_for_config_dir(
+    cwd: str | Path,
+    session_id: str,
+    config_dir: str | Path,
+) -> Path:
+    """Derive a transcript path for an explicit Runtime-owned Claude config."""
     if not _SESSION_ID_RE.fullmatch(session_id):
         raise ValueError(f"Invalid session_id: {session_id!r}")
-    home = home or Path.home()
-    return home / ".claude" / "projects" / cwd_to_slug(cwd) / f"{session_id}.jsonl"
+    root = Path(config_dir)
+    if not root.is_absolute() or root == Path("/") or ".." in root.parts:
+        raise ValueError(f"Invalid Claude config directory: {str(root)!r}")
+    return root / "projects" / cwd_to_slug(cwd) / f"{session_id}.jsonl"
 
 
 def generate_session_uuid() -> str:
