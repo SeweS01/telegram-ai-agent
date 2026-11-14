@@ -6,8 +6,8 @@ blocks — it HTML-escapes `&<>` and strips C0 control bytes (while keeping
 `\\t` and `\\n`) to avoid Telegram rejecting the message.
 
 `await_prompt_ready` is a net-new async polling wrapper used by the tmux
-runner at session spawn. It auto-accepts the trust dialog at most once, then
-polls until the prompt marker appears. On timeout it sends one fallback
+runner at session spawn. It completes known first-run and safety dialogs,
+then polls until the prompt marker appears. On timeout it sends one fallback
 Enter, polls for another 5s, then kills the session and returns False.
 """
 
@@ -30,6 +30,15 @@ TRUST_DIALOG_SUBSTRINGS = (
     "Do you trust the contents of this directory",  # Codex / older CC, fallback
 )
 
+# Claude Code 2.1.325 first-run screens observed with a fresh isolated
+# CLAUDE_CONFIG_DIR. They precede the ordinary per-project trust dialog.
+THEME_DIALOG_SUBSTRING = "Choose the text style that looks best with your terminal"
+SECURITY_NOTES_SUBSTRINGS = ("Security notes:", "Press Enter to continue")
+DANGEROUS_MODE_DIALOG_SUBSTRINGS = (
+    "Claude Code running in Bypass Permissions mode",
+    "Yes, I accept",
+)
+
 # Prompt-ready markers in CC TUI:
 #   "❯ " — idle prompt, ready for input
 #   "start a new conversation" — welcome screen
@@ -45,10 +54,22 @@ _PROMPT_LINE_RE = re.compile(r"(?m)^[❯>]\s")
 
 _POLL_INTERVAL_SEC = 0.5
 _FALLBACK_POLL_BUDGET_SEC = 5.0
+_DIALOG_SELECTION_SETTLE_SEC = 0.5
 
 
 def is_trust_dialog(pane_text: str) -> bool:
     return any(s in pane_text for s in TRUST_DIALOG_SUBSTRINGS)
+
+
+def first_run_dialog(pane_text: str) -> str | None:
+    """Return the known Claude first-run dialog currently shown, if any."""
+    if THEME_DIALOG_SUBSTRING in pane_text:
+        return "theme"
+    if all(marker in pane_text for marker in SECURITY_NOTES_SUBSTRINGS):
+        return "security_notes"
+    if all(marker in pane_text for marker in DANGEROUS_MODE_DIALOG_SUBSTRINGS):
+        return "dangerous_mode"
+    return None
 
 
 def is_prompt_ready(pane_text: str) -> bool:
@@ -93,6 +114,29 @@ def _send_enter(session_name: str) -> None:
     )
 
 
+def _send_down(session_name: str) -> None:
+    subprocess.run(
+        ["tmux", "send-keys", "-t", f"={session_name}:", "Down"],
+        check=True,
+        timeout=_TMUX_CMD_TIMEOUT_SEC,
+    )
+
+
+async def _confirm_dialog(session_name: str, *, select_yes: bool) -> bool:
+    """Confirm one dialog, moving off a fail-safe No default if needed."""
+    try:
+        if select_yes:
+            await asyncio.to_thread(_send_down, session_name)
+            # Claude's TUI must render the selection change before Enter.
+            # Sending Down+Enter together accepts the old No selection on
+            # 2.1.325 and exits the process.
+            await asyncio.sleep(_DIALOG_SELECTION_SETTLE_SEC)
+        await asyncio.to_thread(_send_enter, session_name)
+    except subprocess.SubprocessError:
+        return False
+    return True
+
+
 def _kill_session(session_name: str) -> None:
     subprocess.run(
         ["tmux", "kill-session", "-t", f"={session_name}"],
@@ -109,10 +153,13 @@ async def await_prompt_ready(
     """Poll a tmux session until the Claude CLI prompt is ready.
 
     Polls `tmux capture-pane` every 500ms. Exit conditions:
-      (a) trust-dialog detected + not yet handled → send one Enter, flip
-          `trust_handled = True`, keep polling.
-      (b) prompt-ready detected → return True.
-      (c) deadline reached → send one fallback Enter, poll for 5 more
+      (a) known first-run/safety dialog detected → confirm it once and keep
+          polling; dialogs with a fail-safe `No, exit` default first receive
+          Down, a render delay, then Enter.
+      (b) trust-dialog detected + not yet handled → select the affirmative
+          choice when required, confirm it, and keep polling.
+      (c) prompt-ready detected → return True.
+      (d) deadline reached → send one fallback Enter, poll for 5 more
           seconds; if still not ready → `tmux kill-session` + return False.
 
     `clock` is injectable for tests (default `time.monotonic`). Allows
@@ -126,6 +173,7 @@ async def await_prompt_ready(
     clock = clock or time.monotonic
     deadline = clock() + timeout
     trust_handled = False
+    handled_first_run_dialogs: set[str] = set()
     pane = ""  # captured in loop; initialized so the timeout log never UnboundLocalError.
 
     while clock() < deadline:
@@ -134,10 +182,18 @@ async def await_prompt_ready(
         except subprocess.SubprocessError:
             return False
 
+        dialog = first_run_dialog(pane)
+        if dialog is not None and dialog not in handled_first_run_dialogs:
+            select_yes = dialog == "dangerous_mode" and "❯ No, exit" in pane
+            if not await _confirm_dialog(session_name, select_yes=select_yes):
+                return False
+            handled_first_run_dialogs.add(dialog)
+            await asyncio.sleep(_POLL_INTERVAL_SEC)
+            continue
+
         if is_trust_dialog(pane) and not trust_handled:
-            try:
-                await asyncio.to_thread(_send_enter, session_name)
-            except subprocess.SubprocessError:
+            select_yes = "❯ No, exit" in pane and "Yes, I trust this folder" in pane
+            if not await _confirm_dialog(session_name, select_yes=select_yes):
                 return False
             trust_handled = True
             await asyncio.sleep(_POLL_INTERVAL_SEC)

@@ -15,6 +15,7 @@ from telegram_bot.core.services.providers import (
 )
 from telegram_bot.core.services.tmux_manager import TmuxManager
 from telegram_bot.core.services.tmux_state import TmuxSessionState
+from telegram_bot.core.tui import capture as capture_module
 
 
 @pytest.mark.asyncio
@@ -242,3 +243,37 @@ async def test_recycle_still_blocks_messages_waiting_in_queue() -> None:
 
     tmux_manager.recycle.assert_not_awaited()
     message.answer.assert_awaited_once_with(t("ui.exec_mode_busy"))
+
+
+@pytest.mark.asyncio
+async def test_claude_first_run_dialogs_reach_prompt_without_accepting_no(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panes = iter(
+        [
+            "Choose the text style that looks best with your terminal\n \u276f ✔ Dark mode",
+            "Security notes:\nPress Enter to continue…",
+            "\u276f No, exit\n  Yes, I trust this folder",
+            "Claude Code running in Bypass Permissions mode\n\u276f No, exit\n  Yes, I accept",
+            "\u276f ",
+        ]
+    )
+    actions: list[str] = []
+    monkeypatch.setattr(capture_module, "_capture_pane", lambda _name: next(panes))
+    monkeypatch.setattr(
+        capture_module,
+        "_send_down",
+        lambda _name: actions.append("down"),
+    )
+    monkeypatch.setattr(
+        capture_module,
+        "_send_enter",
+        lambda _name: actions.append("enter"),
+    )
+    monkeypatch.setattr(capture_module, "_POLL_INTERVAL_SEC", 0.0)
+    monkeypatch.setattr(capture_module, "_DIALOG_SELECTION_SETTLE_SEC", 0.0)
+
+    ready = await capture_module.await_prompt_ready("cc-test", timeout=30.0)
+
+    assert ready is True
+    assert actions == ["enter", "enter", "down", "enter", "down", "enter"]
