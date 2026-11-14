@@ -20,6 +20,10 @@ from telegram_bot.core.types import ChannelKey
 
 _HEADER = struct.Struct("!I")
 _MAX_FRAME_SIZE = 1024 * 1024
+_RUNTIME_PROVIDER_TO_ENGINE = {
+    "codex": "codex",
+    "claude_code": "claude",
+}
 
 
 class DispatchDecision(StrEnum):
@@ -106,7 +110,12 @@ class RuntimeDispatchGuard:
             retry_ms = 500
         reason = response.get("reason")
         desired = response.get("desired")
-        desired_provider = desired.get("provider") if isinstance(desired, dict) else None
+        runtime_provider = desired.get("provider") if isinstance(desired, dict) else None
+        desired_provider = (
+            _RUNTIME_PROVIDER_TO_ENGINE.get(runtime_provider)
+            if isinstance(runtime_provider, str)
+            else None
+        )
         desired_model = desired.get("model") if isinstance(desired, dict) else None
         if not isinstance(desired_provider, str) or not desired_provider:
             raise RuntimeDispatchError("Runtime returned an invalid desired provider")

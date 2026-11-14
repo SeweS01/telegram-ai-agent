@@ -44,6 +44,7 @@ async def test_runtime_dispatch_decodes_recycle_and_rejects_deny(tmp_path: Path)
     )
     result = await guard.prepare((-1001, 42))
     assert result.decision is DispatchDecision.RECYCLE_REQUIRED
+    assert result.desired_provider == "codex"
     assert result.desired_model == "gpt-new"
 
     guard._request = AsyncMock(  # type: ignore[method-assign]
@@ -51,6 +52,28 @@ async def test_runtime_dispatch_decodes_recycle_and_rejects_deny(tmp_path: Path)
     )
     with pytest.raises(RuntimeDispatchError, match="unsafe"):
         await guard.prepare((-1001, 42))
+
+
+@pytest.mark.asyncio
+async def test_runtime_dispatch_maps_claude_code_to_upstream_engine(tmp_path: Path) -> None:
+    guard = RuntimeDispatchGuard(
+        socket_path=tmp_path / "runtime.sock",
+        agent_instance_id="agent-1",
+        managed_chat_id=-1001,
+        wait_timeout_seconds=10,
+    )
+    guard._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={
+            "ok": True,
+            "decision": "START_REQUIRED",
+            "desired": {"provider": "claude_code", "model": "deepseek-flash"},
+        }
+    )
+
+    result = await guard.prepare((-1001, 42))
+
+    assert result.desired_provider == "claude"
+    assert result.desired_model == "deepseek-flash"
 
 
 @pytest.mark.asyncio
