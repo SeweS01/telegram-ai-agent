@@ -16,6 +16,7 @@ from telegram_bot.core.services.providers import (
 from telegram_bot.core.services.tmux_manager import TmuxManager
 from telegram_bot.core.services.tmux_state import TmuxSessionState
 from telegram_bot.core.tui import capture as capture_module
+from telegram_bot.core.tui.modal_alert import render_modal_alert
 
 
 @pytest.mark.asyncio
@@ -187,6 +188,66 @@ async def test_existing_codex_late_acceptance_continues_without_resend_alert(
     locate.assert_not_awaited()
     tail.assert_not_awaited()
     alert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_codex_exit_after_enter_is_not_reported_as_modal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = TmuxManager(tmp_path / "sessions")
+    channel_key = (100, 203)
+    state = TmuxSessionState(
+        session_name="cc-100-203",
+        session_dir=str(tmp_path / "sessions" / "cc-100-203"),
+        session_id=None,
+        mode="acceptEdits",
+        cwd=str(tmp_path),
+        mcp_config="",
+        chat_id=100,
+        offset=0,
+        runner_version="codex-tui-v1",
+        provider="codex",
+        model=None,
+        transcript_path=None,
+        base_mcp_config=None,
+    )
+    manager._sessions[channel_key] = state
+
+    monkeypatch.setattr(CODEX_ADAPTER, "is_modal_present", lambda _pane: False)
+    monkeypatch.setattr(manager, "_codex_delivery_visible", lambda *_args: True)
+    monkeypatch.setattr(manager, "_tmux_alive", lambda _name: False)
+    monkeypatch.setattr(tmux_manager_module, "_CODEX_PASTE_POLL_STEP_SEC", 0.0)
+    monkeypatch.setattr(tmux_manager_module, "_ENTER_RETRY_SETTLE_SEC", 0.0)
+    monkeypatch.setattr(
+        tmux_manager_module,
+        "capture_pane",
+        AsyncMock(side_effect=["idle", "prompt", "prompt", ""]),
+    )
+    monkeypatch.setattr(tmux_manager_module, "send_text_to_tmux", AsyncMock())
+    monkeypatch.setattr(tmux_manager_module, "send_enter", AsyncMock())
+    alert = AsyncMock()
+    monkeypatch.setattr(manager, "_send_modal_alert", alert)
+
+    delivered = await manager.send_direct(channel_key, "first prompt")
+
+    assert delivered is False
+    alert.assert_awaited_once()
+    assert alert.await_args.kwargs["reason"] == "provider_exited_after_enter"
+
+
+def test_provider_exit_alert_has_no_modal_keyboard() -> None:
+    text, keyboard = render_modal_alert(
+        prompt="first prompt",
+        pane="Codex exited",
+        session_id="00000000-0000-4000-8000-000000000004",
+        chat_id=100,
+        thread_id=203,
+        reason="provider_exited_after_enter",
+    )
+
+    assert "Codex exited" in text
+    assert "modal dialog" not in text
+    assert keyboard is None
 
 
 @pytest.mark.asyncio

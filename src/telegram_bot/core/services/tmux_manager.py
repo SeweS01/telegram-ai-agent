@@ -1918,17 +1918,21 @@ class TmuxManager:
 
             pane_after_enter = await capture_pane(session_name)
             if not pane_after_enter:
+                session_alive = await asyncio.to_thread(self._tmux_alive, session_name)
                 logger.warning(
-                    "TUI_IO: codex Enter capture empty session=%s attempt=%d",
+                    "TUI_IO: codex Enter capture empty session=%s attempt=%d alive=%s",
                     session_name,
                     enter_attempt,
+                    session_alive,
                 )
                 await self._send_modal_alert(
                     channel_key,
                     state,
                     prompt,
                     pane_current,
-                    reason="enter_capture_empty",
+                    reason=(
+                        "enter_capture_empty" if session_alive else "provider_exited_after_enter"
+                    ),
                 )
                 return _SafeSendOutcome.BLOCKED
 

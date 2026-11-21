@@ -98,6 +98,12 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Your message: <code>{prompt}</code>\n"
             "Open /tui and check the input. Do not resend yet."
         ),
+        "ui.provider_exited_header": (
+            "⚠️ Codex exited while the message was being sent — delivery was not confirmed.\n"
+            "Your message: <code>{prompt}</code>\n"
+            "Check the selected Codex account authorization in Control Center. "
+            "After restoring it, resend the message once."
+        ),
         "ui.modal_idle_detected": (
             "⚠️ CC is waiting on a modal dialog.\n"
             "Dismiss it (Esc / pick an option) so CC can continue."
@@ -375,6 +381,13 @@ MESSAGES: dict[str, dict[str, str]] = {
             "в поле ввода Codex.\n"
             "Твоё сообщение: <code>{prompt}</code>\n"
             "Открой /tui и проверь поле ввода. Пока не отправляй сообщение повторно."
+        ),
+        "ui.provider_exited_header": (
+            "⚠️ Процесс Codex завершился во время отправки — доставка сообщения "
+            "не подтверждена.\n"
+            "Твоё сообщение: <code>{prompt}</code>\n"
+            "Проверь авторизацию выбранного аккаунта Codex в ЦУС. После восстановления "
+            "отправь сообщение один раз заново."
         ),
         "ui.modal_idle_detected": (
             "⚠️ CC ждёт действие в модальном диалоге.\n"

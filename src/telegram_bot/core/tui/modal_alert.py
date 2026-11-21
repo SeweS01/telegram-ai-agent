@@ -47,6 +47,7 @@ _DELIVERY_UNCONFIRMED_REASONS = frozenset(
         "paste_visibility_lost_before_enter",
     }
 )
+_PROVIDER_EXITED_REASONS = frozenset({"provider_exited_after_enter"})
 
 
 def _format_prompt_preview(prompt: str) -> str:
@@ -145,13 +146,17 @@ def render_modal_alert(
       send_message(parse_mode="HTML").
     """
     delivery_unconfirmed = reason in _DELIVERY_UNCONFIRMED_REASONS
-    header_key = (
-        "ui.delivery_unconfirmed_header" if delivery_unconfirmed else "ui.modal_blocked_header"
-    )
+    provider_exited = reason in _PROVIDER_EXITED_REASONS
+    if provider_exited:
+        header_key = "ui.provider_exited_header"
+    elif delivery_unconfirmed:
+        header_key = "ui.delivery_unconfirmed_header"
+    else:
+        header_key = "ui.modal_blocked_header"
     header = t(header_key, prompt=_format_prompt_preview(prompt))
     text = _assemble(header, pane)
     keyboard = None
-    if not delivery_unconfirmed:
+    if not delivery_unconfirmed and not provider_exited:
         keyboard = build_tail_keyboard(
             session_id=session_id,
             chat_id=chat_id,
