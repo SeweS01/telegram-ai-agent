@@ -237,7 +237,7 @@ def test_claude_runtime_metadata_selects_isolated_transcript_root(tmp_path: Path
         session_dir=str(session_dir),
         session_id=session_id,
         mode="free",
-        cwd="/home/devops/workspace/repos/foto_bot",
+        cwd="/srv/projects/photo-app",
         mcp_config="",
         chat_id=-1001,
         provider="claude",
@@ -246,9 +246,7 @@ def test_claude_runtime_metadata_selects_isolated_transcript_root(tmp_path: Path
 
     path = manager._transcript_path_for_state(state)
 
-    assert path == (
-        config_dir / "projects" / "-home-devops-workspace-repos-foto-bot" / f"{session_id}.jsonl"
-    )
+    assert path == (config_dir / "projects" / "-srv-projects-photo-app" / f"{session_id}.jsonl")
     assert state.transcript_path == str(path)
 
 
