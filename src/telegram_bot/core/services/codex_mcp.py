@@ -32,11 +32,6 @@ def _toml_value(value: object) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-def _toml_key(value: str) -> str:
-    """Return a safe TOML dotted-key component."""
-    return value if _SERVER_NAME_RE.fullmatch(value) else _toml_value(value)
-
-
 def _reject_symlink_components(path: Path) -> None:
     current = Path(path.anchor)
     for part in path.parts[1:]:
@@ -120,8 +115,12 @@ def build_codex_mcp_config_args(
     loaded by this module when Codex starts the server process.
     """
     args = ["--ignore-user-config"] if ignore_user_config else []
-    for name in sorted(inherited_server_names or set()):
-        args.extend(["-c", f"mcp_servers.{_toml_key(name)}.enabled=false"])
+    if inherited_server_names:
+        # Replace the merged user/project MCP table in one override before
+        # adding topic-scoped servers. Per-server ``enabled=false`` overrides
+        # can leave Codex with a mixed inherited/runtime table that newer CLI
+        # versions reject while loading workspace requirements.
+        args.extend(["-c", "mcp_servers={}"])
     if not mcp_config:
         return args
 
