@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import mmap
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -62,6 +63,33 @@ OnEventCallable = Callable[[StreamEvent], Awaitable[bool | None] | bool | None]
 @dataclass(frozen=True)
 class _Checkpoint:
     offset: int
+
+
+def _last_codex_turn_boundary_offset(path: Path, checkpoint: int) -> int:
+    """Find the nearest Codex turn boundary without replaying the whole file."""
+    if checkpoint <= 0:
+        return 0
+    try:
+        with path.open("rb") as handle:
+            size = min(checkpoint, path.stat().st_size)
+            if size <= 0:
+                return 0
+            with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as transcript:
+                line_end = size
+                if transcript[line_end - 1 : line_end] == b"\n":
+                    line_end -= 1
+                while line_end >= 0:
+                    previous_newline = transcript.rfind(b"\n", 0, line_end)
+                    line_start = previous_newline + 1
+                    raw = transcript[line_start:line_end].decode("utf-8", errors="replace").strip()
+                    if raw and CodexTranscriptParser.turn_boundary_id(raw) is not None:
+                        return line_start
+                    if previous_newline < 0:
+                        break
+                    line_end = previous_newline
+    except (FileNotFoundError, OSError, ValueError):
+        return 0
+    return 0
 
 
 class TailRunner:
@@ -449,22 +477,23 @@ class TailRunner:
         if checkpoint <= 0:
             return
         try:
-            boundary_offset = 0
-            last_codex_turn_id: str | None = None
+            if isinstance(self._parser, CodexTranscriptParser):
+                boundary_offset = _last_codex_turn_boundary_offset(
+                    self._output_path,
+                    checkpoint,
+                )
+            else:
+                boundary_offset = 0
             with self._output_path.open("r", errors="replace") as f:
-                while f.tell() < checkpoint:
-                    line_start = f.tell()
-                    line = f.readline()
-                    if not line or not line.endswith("\n") or f.tell() > checkpoint:
-                        break
-                    raw = line.strip()
-                    if raw and isinstance(self._parser, CodexTranscriptParser):
-                        turn_id = self._parser.turn_boundary_id(raw)
-                        if turn_id is not None and turn_id != last_codex_turn_id:
+                if not isinstance(self._parser, CodexTranscriptParser):
+                    while f.tell() < checkpoint:
+                        line_start = f.tell()
+                        line = f.readline()
+                        if not line or not line.endswith("\n") or f.tell() > checkpoint:
+                            break
+                        raw = line.strip()
+                        if raw and self._parser.is_turn_boundary(raw):
                             boundary_offset = line_start
-                            last_codex_turn_id = turn_id
-                    elif raw and self._parser.is_turn_boundary(raw):
-                        boundary_offset = line_start
 
                 f.seek(boundary_offset)
                 while f.tell() < checkpoint:
